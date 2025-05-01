@@ -1,6 +1,6 @@
 # GeneralUtils
 General utils
-
+"""
 
 <style>
   .config-form {
@@ -135,4 +135,4 @@ jiraxray.P=${jiraxrayP}`;
     document.getElementById("configOutput").innerText = output;
   }
 </script>
-
+"""
