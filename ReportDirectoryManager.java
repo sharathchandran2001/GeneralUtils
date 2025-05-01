@@ -44,13 +44,3 @@ public class ReportDirectoryManager {
 
 }
 
-
-
-
-<h2 style="color:#0052CC; font-family:Arial, sans-serif;">
-  Test Execution Config Generator
-</h2>
-<p style="font-family:Arial, sans-serif; font-size:14px; color:#444;">
-  Use the form below to select your desired execution options. The output will be a ready-to-use snippet 
-  that you can copy into your <code>config.properties</code> file.
-</p>
