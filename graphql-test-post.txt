@@ -1,0 +1,26 @@
+{
+  getBooks {
+    title
+    author
+    owner {
+      name
+    }
+  }
+
+  getBookById(id: 1) {
+    title
+    owner {
+      id
+      name
+    }
+  }
+
+  getUsers {
+    id
+    name
+  }
+
+  getUserById(id: 2) {
+    name
+  }
+}
