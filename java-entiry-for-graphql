@@ -1,0 +1,79 @@
+// Customer.java
+public class Customer {
+    public String id;
+    public String name;
+    public String email;
+    public Address address;
+    public List<Account> accounts;
+
+    // constructor, getters/setters
+}
+
+// Address.java
+public class Address {
+    public String street;
+    public String city;
+    public String zipcode;
+    // constructor, getters/setters
+}
+
+// Account.java
+public class Account {
+    public String accountNumber;
+    public String type;
+    public double balance;
+    // constructor, getters/setters
+}
+
+
+// CustomerController.java
+@Component
+public class CustomerController {
+
+    private final List<Customer> customers = new ArrayList<>();
+
+    public CustomerController() {
+        customers.add(new Customer(
+            "1", "Alice", "alice@example.com",
+            new Address("Street 1", "NYC", "10001"),
+            List.of(new Account("123456", "SAVINGS", 2500.50))
+        ));
+        customers.add(new Customer(
+            "2", "Bob", "bob@example.com",
+            new Address("Street 2", "LA", "90001"),
+            List.of(new Account("654321", "CHECKING", 1000.00))
+        ));
+    }
+
+    @QueryMapping
+    public List<Customer> customers() {
+        return customers;
+    }
+
+    @QueryMapping
+    public Customer customerById(@Argument String id) {
+        return customers.stream()
+                        .filter(c -> c.id.equals(id))
+                        .findFirst()
+                        .orElse(null);
+    }
+}
+
+
+http://localhost:8080/graphiql
+
+
+query {
+  customers {
+    name
+    email
+    address {
+      city
+    }
+    accounts {
+      accountNumber
+      balance
+    }
+  }
+}
+
