@@ -1,0 +1,23 @@
+{
+  allCustomers {
+    id
+    name
+    address {
+      city
+      country
+    }
+    accounts {
+      id
+      type
+      balance
+    }
+  }
+
+  customerById(id: 1) {
+    name
+    accounts {
+      type
+      balance
+    }
+  }
+}
