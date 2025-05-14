@@ -10,3 +10,6 @@ uvicorn main:app --reload
 pip install pymupdf 
 pip install openpyxl
 
+pip install fastapi strawberry-graphql uvicorn
+
+
