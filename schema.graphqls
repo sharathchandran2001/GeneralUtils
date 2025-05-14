@@ -1,0 +1,24 @@
+type Query {
+    customers: [Customer]
+    customerById(id: ID!): Customer
+}
+
+type Customer {
+    id: ID
+    name: String
+    email: String
+    address: Address
+    accounts: [Account]
+}
+
+type Address {
+    street: String
+    city: String
+    zipcode: String
+}
+
+type Account {
+    accountNumber: String
+    type: String
+    balance: Float
+}
