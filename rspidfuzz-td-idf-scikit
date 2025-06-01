@@ -1,0 +1,164 @@
+project_root/
+├── app/
+│   ├── __init__.py
+│   ├── main.py                # FastAPI app entrypoint
+│   ├── routes/
+│   │   ├── __init__.py
+│   │   └── search.py          # API routes
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── search_model.py    # Pydantic model
+│   ├── services/
+│   │   ├── __init__.py
+│   │   └── search_service.py  # Business logic
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   └── file_loader.py     # Utility to load paragraphs
+│   └── logs/
+│       └── app.log            # Logs output here
+├── DB/
+│   ├── p1.txt
+│   ├── p2.txt
+│   ├── p3.txt
+│   └── p4.txt
+├── requirements.txt
+```
+
+---
+
+### `requirements.txt`
+```
+fastapi
+uvicorn
+scikit-learn
+numpy
+rapidfuzz
+```
+
+---
+
+### `app/main.py`
+```python
+from fastapi import FastAPI
+from app.routes import search
+import logging
+
+app = FastAPI(title="Paragraph Search API")
+
+# Setup logging
+logging.basicConfig(
+    filename="app/logs/app.log",
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
+
+# Include routes
+app.include_router(search.router)
+```
+
+---
+
+### `app/models/search_model.py`
+```python
+from pydantic import BaseModel
+
+class SearchQuery(BaseModel):
+    query: str
+```
+
+---
+
+### `app/routes/search.py`
+```python
+from fastapi import APIRouter, HTTPException
+from app.models.search_model import SearchQuery
+from app.services.search_service import ParagraphSearchService
+import logging
+
+router = APIRouter(prefix="/search", tags=["Search"])
+
+@router.post("/", summary="Search paragraphs using TF-IDF and RapidFuzz")
+def search_paragraphs(query: SearchQuery):
+    try:
+        logging.info("Received search request")
+        service = ParagraphSearchService()
+        return service.search(query.query)
+    except Exception as e:
+        logging.error(f"Search failed: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+```
+
+---
+
+### `app/services/search_service.py`
+```python
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+from rapidfuzz import fuzz, process
+from app.utils.file_loader import load_paragraphs
+import numpy as np
+import logging
+
+class ParagraphSearchService:
+    def __init__(self):
+        logging.info("Loading paragraphs from DB directory")
+        self.paragraphs = load_paragraphs("DB")
+
+    def search(self, query: str) -> dict:
+        logging.info(f"Running TF-IDF and RapidFuzz search for query: {query}")
+
+        # TF-IDF
+        vectorizer = TfidfVectorizer(stop_words='english')
+        tfidf_matrix = vectorizer.fit_transform(self.paragraphs + [query])
+        cosine_similarities = cosine_similarity(tfidf_matrix[-1], tfidf_matrix[:-1]).flatten()
+        best_tfidf_idx = np.argmax(cosine_similarities)
+
+        # RapidFuzz
+        best_rapidfuzz_match, rapidfuzz_score, idx = process.extractOne(
+            query, self.paragraphs, scorer=fuzz.token_set_ratio
+        )
+
+        return {
+            "query": query,
+            "tfidf_match": {
+                "paragraph": self.paragraphs[best_tfidf_idx],
+                "score": round(float(cosine_similarities[best_tfidf_idx]), 4)
+            },
+            "rapidfuzz_match": {
+                "paragraph": best_rapidfuzz_match,
+                "score": round(rapidfuzz_score, 1)
+            }
+        }
+```
+
+---
+
+### `app/utils/file_loader.py`
+```python
+import os
+import logging
+
+def load_paragraphs(folder_path: str) -> list:
+    paragraphs = []
+    for filename in sorted(os.listdir(folder_path)):
+        if filename.endswith(".txt"):
+            file_path = os.path.join(folder_path, filename)
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    paragraphs.append(f.read().strip())
+            except Exception as e:
+                logging.error(f"Error reading {file_path}: {e}")
+    logging.info(f"Loaded {len(paragraphs)} paragraphs")
+    return paragraphs
+```
+
+---
+
+### 🧪 Run the app
+```bash
+uvicorn app.main:app --reload
+```
+
+Then open [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) for Swagger UI.
+
+Let me know if you want MongoDB/TinyDB integration next!
