@@ -104,30 +104,21 @@ def test_missing_token():
 
 =====
 
+from types import SimpleNamespace
+from utils.ip_utils import get_client_ip
 
-import pytest
-from starlette.requests import Request
-from starlette.datastructures import Headers
-from starlette.testclient import TestClient
-from fastapi import FastAPI
-from utils.ip_utils import get_client_ip  # your utility
+def test_get_client_ip_with_header():
+    mock_request = SimpleNamespace()
+    mock_request.headers = {"x-forwarded-for": "203.0.113.10"}
+    mock_request.client = SimpleNamespace(host="127.0.0.1")
 
-# Create a dummy FastAPI app to generate a Request object
-app = FastAPI()
+    ip = get_client_ip(mock_request)
+    assert ip == "203.0.113.10"
 
-@app.get("/test-ip")
-def test_ip(request: Request):
-    return {"ip": get_client_ip(request)}
+def test_get_client_ip_without_header():
+    mock_request = SimpleNamespace()
+    mock_request.headers = {}
+    mock_request.client = SimpleNamespace(host="127.0.0.1")
 
-client = TestClient(app)
-
-def test_get_client_ip_with_forwarded_for():
-    response = client.get("/test-ip", headers={"x-forwarded-for": "192.168.1.1"})
-    assert response.json()["ip"] == "192.168.1.1"
-
-def test_get_client_ip_without_forwarded_for():
-    response = client.get("/test-ip")
-    ip = response.json()["ip"]
-    assert isinstance(ip, str)
-    assert ip != ""  # just make sure it's not empty
-
+    ip = get_client_ip(mock_request)
+    assert ip == "127.0.0.1"
