@@ -99,3 +99,35 @@ def test_missing_token():
     with pytest.raises(Exception) as exc_info:
         verify_jwt(request)
     assert "Missing or invalid token" in str(exc_info.value)
+
+
+
+=====
+
+
+import pytest
+from starlette.requests import Request
+from starlette.datastructures import Headers
+from starlette.testclient import TestClient
+from fastapi import FastAPI
+from utils.ip_utils import get_client_ip  # your utility
+
+# Create a dummy FastAPI app to generate a Request object
+app = FastAPI()
+
+@app.get("/test-ip")
+def test_ip(request: Request):
+    return {"ip": get_client_ip(request)}
+
+client = TestClient(app)
+
+def test_get_client_ip_with_forwarded_for():
+    response = client.get("/test-ip", headers={"x-forwarded-for": "192.168.1.1"})
+    assert response.json()["ip"] == "192.168.1.1"
+
+def test_get_client_ip_without_forwarded_for():
+    response = client.get("/test-ip")
+    ip = response.json()["ip"]
+    assert isinstance(ip, str)
+    assert ip != ""  # just make sure it's not empty
+
