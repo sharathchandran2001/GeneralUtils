@@ -95,3 +95,95 @@ pytest -q --disable-warnings \
 
 
 
+#=======================================================================
+
+# tests/test_routes.py
+
+import pytest
+
+
+def test_fuzzy_logic_response_success(client, monkeypatch):
+    # Mock match_api_endpoint_async to avoid heavy logic
+    async def fake_match(step: str):
+        return {"keyword": "app1 url details", "api_endpoint": "url1"}
+
+    import routes.fuzzy_logic as fuzzy_logic
+    monkeypatch.setattr(fuzzy_logic, "match_api_endpoint_async", fake_match)
+
+    payload = {"step": "get account"}
+    response = client.post("/fuzzy_logic_response", json=payload)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["logic"] == "fuzzy logic"
+    assert "elapsed_time_fuzzy in ms" in data
+    assert data["matched_keyword"] == "app1 url details"
+    assert data["api_endpoint"] == "url1"
+    assert "RESERVE" in data["data"]
+
+
+def test_nlp_logic_response_success(client):
+    payload = {"step": "app2 url"}  # should fuzzy match "app2 url details"
+    response = client.post("/nlp_logic_response", json=payload)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["logic"] == "NLP logic"
+    assert "elapsed_time_nlp in ms" in data
+    assert data["matched_keyword"] == "app2 url details"
+    assert data["api_endpoint"] == "url2"
+    assert "RESERVE" in data["data"]
+
+
+def test_fuzzy_logic_response_invalid_payload(client):
+    # Missing required field "step"
+    response = client.post("/fuzzy_logic_response", json={"wrong": "data"})
+    assert response.status_code == 422
+
+
+def test_nlp_logic_response_invalid_payload(client):
+    # Missing required field "step"
+    response = client.post("/nlp_logic_response", json={"foo": "bar"})
+    assert response.status_code == 422
+
+
+#tests/conftest.py
+
+import pytest
+import json
+import importlib
+from fastapi.testclient import TestClient
+import config
+
+
+@pytest.fixture(scope="session")
+def client(tmp_path_factory, monkeypatch):
+    # Create a temporary mapping.json for tests
+    tmp_dir = tmp_path_factory.mktemp("data")
+    mapping_file = tmp_dir / "mapping.json"
+    mapping = {
+        "app1 url details": "url1",
+        "app2 url details": "url2",
+        "app3 url details": "url3"
+    }
+    mapping_file.write_text(json.dumps(mapping))
+
+    # Monkeypatch config.URL_MAPPING to point at test file
+    monkeypatch.setattr(config, "URL_MAPPING", str(mapping_file))
+
+    # Reload dev module so it picks up test mapping.json
+    import routes.fuzzy_logic as fuzzy_logic
+    importlib.reload(fuzzy_logic)
+
+    # Build FastAPI test app
+    from fastapi import FastAPI
+    app = FastAPI()
+    app.include_router(fuzzy_logic.router)
+
+    return TestClient(app)
+
+
+
+
+
+
