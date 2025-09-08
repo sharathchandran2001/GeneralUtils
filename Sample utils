@@ -1,1 +1,31 @@
-# dummy test utils
+const url = "https://api.example.com/data";  
+
+// Request body (JSON payload)
+const payload = {
+  key1: "value1",
+  key2: "value2"
+};
+
+// Bearer token
+const token = "your_bearer_token_here";
+
+fetch(url, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",  // tells server you're sending JSON
+    "Authorization": `Bearer ${token}`   // Bearer authentication
+  },
+  body: JSON.stringify(payload)
+})
+.then(response => {
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();  // parse JSON response
+})
+.then(data => {
+  console.log("Response:", data);
+})
+.catch(error => {
+  console.error("Error:", error);
+});
