@@ -29,3 +29,36 @@ fetch(url, {
 .catch(error => {
   console.error("Error:", error);
 });
+
+
+
+
+
+
+
+const axios = require("axios");  // if running in Node.js, install with: npm install axios
+
+const url = "https://api.example.com/data";
+
+// Request body
+const payload = {
+  key1: "value1",
+  key2: "value2"
+};
+
+// Bearer token
+const token = "your_bearer_token_here";
+
+axios.post(url, payload, {
+  headers: {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${token}`
+  }
+})
+.then(response => {
+  console.log("Response:", response.data);
+})
+.catch(error => {
+  console.error("Error:", error.response ? error.response.data : error.message);
+});
+
