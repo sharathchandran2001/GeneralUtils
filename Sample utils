@@ -1,1 +1,89 @@
-dummy tests
+import json
+import os
+import pickle
+import hashlib
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+from utils.file_utils import file_hash
+
+# Global state
+clf = None
+vectorizer = None
+intent_responses = {}
+kb_vectorizer = None
+kb_embeddings = None
+kb_responses = None
+last_kb_hash = None
+
+# File paths
+KB_FILE = "kb.json"
+INTENT_MODEL_FILE = "intent_model.pkl"
+VECTORIZER_FILE = "vectorizer.pkl"
+KB_VECTORIZER_FILE = "kb_vectorizer.pkl"
+KB_EMBEDDINGS_FILE = "kb_embeddings.pkl"
+KB_RESPONSES_FILE = "kb_responses.pkl"
+
+def load_kb(force_reload=False):
+    global clf, vectorizer, intent_responses
+    global kb_vectorizer, kb_embeddings, kb_responses
+    global last_kb_hash
+
+    current_hash = file_hash(KB_FILE)
+
+    if not force_reload and current_hash == last_kb_hash and os.path.exists(INTENT_MODEL_FILE):
+        clf = pickle.load(open(INTENT_MODEL_FILE, "rb"))
+        vectorizer = pickle.load(open(VECTORIZER_FILE, "rb"))
+        intent_responses = pickle.load(open("intent_responses.pkl", "rb"))
+        kb_vectorizer = pickle.load(open(KB_VECTORIZER_FILE, "rb"))
+        kb_embeddings = pickle.load(open(KB_EMBEDDINGS_FILE, "rb"))
+        kb_responses = pickle.load(open(KB_RESPONSES_FILE, "rb"))
+        print("KB unchanged. Loaded models from disk.")
+        return
+
+    with open(KB_FILE, "r", encoding="utf-8") as f:
+        kb_data = json.load(f)
+
+    examples = [item['example'] for item in kb_data]
+    intents = [item['intent'] for item in kb_data]
+
+    # Train intent classifier
+    vectorizer = TfidfVectorizer()
+    X = vectorizer.fit_transform(examples)
+    clf = MultinomialNB()
+    clf.fit(X, intents)
+    intent_responses = {item['intent']: item['response'] for item in kb_data}
+
+    pickle.dump(clf, open(INTENT_MODEL_FILE, "wb"))
+    pickle.dump(vectorizer, open(VECTORIZER_FILE, "wb"))
+    pickle.dump(intent_responses, open("intent_responses.pkl", "wb"))
+
+    # Train semantic retrieval
+    kb_vectorizer = TfidfVectorizer()
+    kb_embeddings = kb_vectorizer.fit_transform(examples)
+    kb_responses = [item['response'] for item in kb_data]
+
+    pickle.dump(kb_vectorizer, open(KB_VECTORIZER_FILE, "wb"))
+    pickle.dump(kb_embeddings, open(KB_EMBEDDINGS_FILE, "wb"))
+    pickle.dump(kb_responses, open(KB_RESPONSES_FILE, "wb"))
+
+    last_kb_hash = current_hash
+    print(f"KB loaded and models trained with {len(kb_data)} entries.")
+
+# Watchdog handler
+class KBReloadHandler(FileSystemEventHandler):
+    def on_modified(self, event):
+        if event.src_path.endswith(KB_FILE):
+            print("KB file changed. Reloading...")
+            load_kb(force_reload=True)
+
+observer = Observer()
+
+def start_kb_watcher():
+    observer.schedule(KBReloadHandler(), path=".", recursive=False)
+    observer.start()
+
+def stop_kb_watcher():
+    observer.stop()
+    observer.join()
