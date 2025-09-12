@@ -26,6 +26,16 @@ If intent uncertain → fallback to KB search:
 
 kb_vectorizer.pkl → convert query
 
+
+fastapi==0.111.2
+uvicorn[standard]==0.23.2
+scikit-learn==1.3.2
+numpy==1.26.5
+pandas==2.1.1
+pydantic==2.6.2
+watchdog==3.0.1
+
+
 Compare with kb_embeddings.pkl using cosine similarity
 
 Retrieve answer from kb_responses.pkl
