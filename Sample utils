@@ -1,9 +1,1 @@
 from fastapi import APIRouter
-from models.chat_request import ChatRequest
-from services.chat_service import handle_chat
-
-router = APIRouter()
-
-@router.post("/chat")
-async def chat(request: ChatRequest):
-    return handle_chat(request.message, request.session_id)
