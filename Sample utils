@@ -1,34 +1,9 @@
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
-from services import kb_service
-from services.session_service import sessions
-import uuid
+from fastapi import APIRouter
+from models.chat_request import ChatRequest
+from services.chat_service import handle_chat
 
-def handle_chat(message: str, session_id: str | None = None):
-    if not session_id or session_id not in sessions:
-        session_id = str(uuid.uuid4())
-        sessions[session_id] = []
+router = APIRouter()
 
-    msg_lower = message.lower()
-    sessions[session_id].append(message)
-
-    # Intent classification
-    X_test = kb_service.vectorizer.transform([msg_lower])
-    intent = kb_service.clf.predict(X_test)[0]
-    intent_response = kb_service.intent_responses.get(intent, None)
-
-    # Semantic retrieval
-    query_vec = kb_service.kb_vectorizer.transform([msg_lower])
-    sim_scores = cosine_similarity(query_vec, kb_service.kb_embeddings).flatten()
-    best_idx = np.argmax(sim_scores)
-    semantic_response = kb_service.kb_responses[best_idx]
-
-    # Hybrid decision
-    probs = kb_service.clf.predict_proba(X_test).max()
-    if probs >= 0.4:
-        response = intent_response
-    else:
-        response = semantic_response
-
-    sessions[session_id].append(response)
-    return {"session_id": session_id, "response": response}
+@router.post("/chat")
+async def chat(request: ChatRequest):
+    return handle_chat(request.message, request.session_id)
