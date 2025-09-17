@@ -1,3 +1,44 @@
+
+import httpx
+
+async def run_api_test(url: str, expected_status: int = 200):
+    """Calls an API and validates status code."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(url)
+
+    return {
+        "url": url,
+        "status_code": response.status_code,
+        "expected_status": expected_status,
+        "success": response.status_code == expected_status,
+    }
+
+
+
+
+import pytest
+import asyncio
+from api_test import run_api_test
+
+
+@pytest.mark.asyncio
+async def test_httpbin_status():
+    """Validate API returns expected 200 status."""
+    result = await run_api_test("https://httpbin.org/status/200", expected_status=200)
+    assert result["success"], f"Expected {result['expected_status']} but got {result['status_code']}"
+
+
+@pytest.mark.asyncio
+async def test_httpbin_404():
+    """Validate API returns 404 as expected."""
+    result = await run_api_test("https://httpbin.org/status/404", expected_status=404)
+    assert result["success"], f"Expected {result['expected_status']} but got {result['status_code']}"
+
+
+
+
+______
+
 from playwright.sync_api import sync_playwright
 
 # fallback paths if channel is not supported in your Playwright build
