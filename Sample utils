@@ -1,3 +1,63 @@
+#tests/duckduckgo_test.py
+
+from playwright.sync_api import sync_playwright
+
+def run_duckduckgo_search(query: str, browser_channel: str = "chrome") -> dict:
+    """Run a DuckDuckGo search using system-installed browser (Chrome/Edge)."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(channel=browser_channel, headless=True)
+        page = browser.new_page()
+        page.goto("https://duckduckgo.com/")
+
+        page.fill("input[name='q']", query)
+        page.press("input[name='q']", "Enter")
+
+        page.wait_for_selector("a.result__a")
+        results = page.locator("a.result__a").all_text_contents()
+
+        browser.close()
+
+    return {
+        "query": query,
+        "browser": browser_channel,
+        "results": results[:5]  # return top 5 results
+    }
+
+
+
+
+____
+
+#main.py
+
+from fastapi import FastAPI
+from pydantic import BaseModel
+from tests.duckduckgo_test import run_duckduckgo_search
+
+app = FastAPI()
+
+class TestRequest(BaseModel):
+    query: str
+    browser: str = "chrome"  # default to Chrome, can be "msedge"
+
+@app.post("/run-test")
+def run_test(request: TestRequest):
+    """Trigger DuckDuckGo Playwright test via API."""
+    result = run_duckduckgo_search(request.query, request.browser)
+    return {"status": "ok", "data": result}
+
+
+
+
+
+
+≈============
+
+
+
+
+
+
 # tests/duckduckgo_test.py ======
 
 from playwright.sync_api import sync_playwright
