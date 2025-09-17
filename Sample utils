@@ -1,11 +1,44 @@
-#tests/duckduckgo_test.py
-
 from playwright.sync_api import sync_playwright
 
-def run_duckduckgo_search(query: str, browser_channel: str = "chrome") -> dict:
-    """Run a DuckDuckGo search using system-installed browser (Chrome/Edge)."""
+# fallback paths if channel is not supported in your Playwright build
+CHROME_PATHS = [
+    r"C:\Program Files\Google\Chrome\Application\chrome.exe",  # Windows
+    r"/usr/bin/google-chrome",                                 # Linux
+    r"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",  # Mac
+]
+
+EDGE_PATHS = [
+    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",  # Windows
+    r"/usr/bin/microsoft-edge",                                       # Linux
+]
+
+
+def get_browser(p, browser_choice: str):
+    """Launch system-installed browser (Chrome/Edge) with fallback paths."""
+    browser_choice = browser_choice.lower()
+
+    try:
+        if browser_choice == "chrome":
+            return p.chromium.launch(channel="chrome", headless=True)
+        elif browser_choice == "msedge":
+            return p.chromium.launch(channel="msedge", headless=True)
+    except NotImplementedError:
+        # Fallback to executable_path if channel not supported
+        paths = CHROME_PATHS if browser_choice == "chrome" else EDGE_PATHS
+        for path in paths:
+            try:
+                return p.chromium.launch(executable_path=path, headless=True)
+            except Exception:
+                continue
+        raise RuntimeError(f"{browser_choice} not found on this system.")
+
+    raise ValueError(f"Unsupported browser: {browser_choice}")
+
+
+def run_duckduckgo_search(query: str, browser_choice: str = "chrome") -> dict:
+    """Run a DuckDuckGo search using system-installed browser."""
     with sync_playwright() as p:
-        browser = p.chromium.launch(channel=browser_channel, headless=True)
+        browser = get_browser(p, browser_choice)
         page = browser.new_page()
         page.goto("https://duckduckgo.com/")
 
@@ -19,131 +52,36 @@ def run_duckduckgo_search(query: str, browser_channel: str = "chrome") -> dict:
 
     return {
         "query": query,
-        "browser": browser_channel,
-        "results": results[:5]  # return top 5 results
+        "browser": browser_choice,
+        "results": results[:5],
     }
 
 
 
-
-____
-
-#main.py
+====/
 
 from fastapi import FastAPI
 from pydantic import BaseModel
 from tests.duckduckgo_test import run_duckduckgo_search
 
-app = FastAPI()
+app = FastAPI(title="Playwright POC with System Browsers")
 
 class TestRequest(BaseModel):
     query: str
-    browser: str = "chrome"  # default to Chrome, can be "msedge"
+    browser: str = "chrome"  # can be "chrome" or "msedge"
 
 @app.post("/run-test")
 def run_test(request: TestRequest):
     """Trigger DuckDuckGo Playwright test via API."""
-    result = run_duckduckgo_search(request.query, request.browser)
-    return {"status": "ok", "data": result}
+    try:
+        result = run_duckduckgo_search(request.query, request.browser)
+        return {"status": "ok", "data": result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 
 
 
+=====
 
-
-≈============
-
-
-
-
-
-
-# tests/duckduckgo_test.py ======
-
-from playwright.sync_api import sync_playwright
-
-def run_duckduckgo_test(query="Playwright UI automation", browser_name="chrome"):
-    results = []
-    with sync_playwright() as p:
-        # Map browser_name to Playwright launch
-        if browser_name.lower() == "chrome":
-            browser = p.chromium.launch(channel="chrome", headless=True)
-        elif browser_name.lower() == "edge":
-            browser = p.chromium.launch(channel="msedge", headless=True)
-        elif browser_name.lower() == "firefox":
-            browser = p.firefox.launch(headless=True)
-        else:
-            raise ValueError(f"Unsupported browser: {browser_name}")
-
-        page = browser.new_page()
-        page.goto("https://duckduckgo.com/")
-
-        page.fill("input[name='q']", query)
-        page.press("input[name='q']", "Enter")
-
-        page.wait_for_selector("a.result__a")
-        results = page.locator("a.result__a").all_text_contents()
-        browser.close()
-
-    return {
-        "query": query,
-        "browser": browser_name,
-        "total_results": len(results),
-        "top_results": results[:5],
-        "passed": any("Playwright" in r for r in results)
-    }
-
-
-# main.py ======
-
-from fastapi import FastAPI
-from pydantic import BaseModel
-from tests.duckduckgo_test import run_duckduckgo_test
-
-app = FastAPI()
-
-class TestRequest(BaseModel):
-    gherkin: str
-
-@app.post("/run-test")
-def run_test(req: TestRequest):
-    text = req.gherkin.lower()
-
-    # Defaults
-    query = "Playwright UI automation"
-    browser = "chrome"
-
-    # Detect DuckDuckGo intent
-    if "duckduckgo" in text:
-        # Try to extract query (after 'search for ...')
-        if "search for" in text:
-            query = text.split("search for", 1)[1].strip().title()
-        # Detect browser
-        if "edge" in text:
-            browser = "edge"
-        elif "firefox" in text:
-            browser = "firefox"
-        elif "chrome" in text:
-            browser = "chrome"
-
-        try:
-            result = run_duckduckgo_test(query=query, browser_name=browser)
-            return {"gherkin": req.gherkin, "result": result}
-        except Exception as e:
-            return {"error": str(e), "gherkin": req.gherkin}
-    else:
-        return {"error": "No matching test found for input", "gherkin": req.gherkin}
-
-
-# requirments.txt
-
-fastapi
-uvicorn
-playwright
-pytest
-pytest-playwright
-
-#after installing run,
-playwright install
-playwright install chrome
 
