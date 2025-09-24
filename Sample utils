@@ -1,128 +1,67 @@
+import json
+import logging
+from pathlib import Path
+from typing import Dict
 
-import httpx
+logger = logging.getLogger(__name__)
 
-async def run_api_test(url: str, expected_status: int = 200):
-    """Calls an API and validates status code."""
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.get(url)
+class MappingLoader:
+    """
+    Loads and manages multiple mapping JSON files.
+    Each file represents one environment/scope (e.g., legacy, mod, reserve).
+    """
 
-    return {
-        "url": url,
-        "status_code": response.status_code,
-        "expected_status": expected_status,
-        "success": response.status_code == expected_status,
-    }
+    def __init__(self, base_path: str = "data"):
+        self.base_path = Path(base_path)
+        self.mappings: Dict[str, Dict[str, str]] = {}
 
+    def load_mapping(self, name: str, filename: str) -> None:
+        """Load a mapping JSON file into memory under a given name."""
+        file_path = self.base_path / filename
+        if not file_path.exists():
+            logger.warning(f"Mapping file {file_path} not found.")
+            self.mappings[name] = {}
+            return
 
+        try:
+            with file_path.open("r") as f:
+                self.mappings[name] = json.load(f)
+                logger.info(f"Loaded mapping file {filename} into scope '{name}'")
+        except Exception as e:
+            logger.error(f"Failed to load {filename}: {e}")
+            self.mappings[name] = {}
 
-
-import pytest
-import asyncio
-from api_test import run_api_test
-
-
-@pytest.mark.asyncio
-async def test_httpbin_status():
-    """Validate API returns expected 200 status."""
-    result = await run_api_test("https://httpbin.org/status/200", expected_status=200)
-    assert result["success"], f"Expected {result['expected_status']} but got {result['status_code']}"
-
-
-@pytest.mark.asyncio
-async def test_httpbin_404():
-    """Validate API returns 404 as expected."""
-    result = await run_api_test("https://httpbin.org/status/404", expected_status=404)
-    assert result["success"], f"Expected {result['expected_status']} but got {result['status_code']}"
-
-
-
-
-______
-
-from playwright.sync_api import sync_playwright
-
-# fallback paths if channel is not supported in your Playwright build
-CHROME_PATHS = [
-    r"C:\Program Files\Google\Chrome\Application\chrome.exe",  # Windows
-    r"/usr/bin/google-chrome",                                 # Linux
-    r"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",  # Mac
-]
-
-EDGE_PATHS = [
-    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",  # Windows
-    r"/usr/bin/microsoft-edge",                                       # Linux
-]
-
-
-def get_browser(p, browser_choice: str):
-    """Launch system-installed browser (Chrome/Edge) with fallback paths."""
-    browser_choice = browser_choice.lower()
-
-    try:
-        if browser_choice == "chrome":
-            return p.chromium.launch(channel="chrome", headless=True)
-        elif browser_choice == "msedge":
-            return p.chromium.launch(channel="msedge", headless=True)
-    except NotImplementedError:
-        # Fallback to executable_path if channel not supported
-        paths = CHROME_PATHS if browser_choice == "chrome" else EDGE_PATHS
-        for path in paths:
-            try:
-                return p.chromium.launch(executable_path=path, headless=True)
-            except Exception:
-                continue
-        raise RuntimeError(f"{browser_choice} not found on this system.")
-
-    raise ValueError(f"Unsupported browser: {browser_choice}")
-
-
-def run_duckduckgo_search(query: str, browser_choice: str = "chrome") -> dict:
-    """Run a DuckDuckGo search using system-installed browser."""
-    with sync_playwright() as p:
-        browser = get_browser(p, browser_choice)
-        page = browser.new_page()
-        page.goto("https://duckduckgo.com/")
-
-        page.fill("input[name='q']", query)
-        page.press("input[name='q']", "Enter")
-
-        page.wait_for_selector("a.result__a")
-        results = page.locator("a.result__a").all_text_contents()
-
-        browser.close()
-
-    return {
-        "query": query,
-        "browser": browser_choice,
-        "results": results[:5],
-    }
-
-
-
-====/
-
-from fastapi import FastAPI
-from pydantic import BaseModel
-from tests.duckduckgo_test import run_duckduckgo_search
-
-app = FastAPI(title="Playwright POC with System Browsers")
-
-class TestRequest(BaseModel):
-    query: str
-    browser: str = "chrome"  # can be "chrome" or "msedge"
-
-@app.post("/run-test")
-def run_test(request: TestRequest):
-    """Trigger DuckDuckGo Playwright test via API."""
-    try:
-        result = run_duckduckgo_search(request.query, request.browser)
-        return {"status": "ok", "data": result}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    def get_mapping(self, name: str) -> Dict[str, str]:
+        """Retrieve the mapping dictionary by scope name (legacy, mod, reserve)."""
+        return self.mappings.get(name, {})
 
 
 
 
-=====
+from rapidfuzz import process
+from typing import Dict, Tuple, Optional
 
+class FuzzyMatcher:
+    """
+    Fuzzy matches a given query against a mapping dictionary.
+    """
+
+    def __init__(self, mapping: Dict[str, str]):
+        self.mapping = mapping
+
+    def match(self, query: str, score_cutoff: int = 70) -> Optional[Tuple[str, str, int]]:
+        """
+        Match query string against mapping keys.
+
+        Returns:
+            (best_key, mapped_value, score) if match found, else None.
+        """
+        if not self.mapping:
+            return None
+
+        best_match = process.extractOne(query, self.mapping.keys(), score_cutoff=score_cutoff)
+        if best_match:
+            key, score, _ = best_match
+            return key, self.mapping[key], score
+        return None
 
